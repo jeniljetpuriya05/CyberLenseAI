@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import Login from './pages/Login';
+import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import Investigations from './pages/Investigations';
 import CreateInvestigation from './pages/CreateInvestigation';
@@ -19,6 +20,7 @@ export default function App() {
       <Routes>
         {/* Auth */}
         <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
         <Route path="/" element={<Navigate to="/login" replace />} />
 
         {/* Main app layout */}
