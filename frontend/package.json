@@ -10,7 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@mermaid-js/mermaid-cli": "^11.16.0",
     "lucide-react": "^1.28.0",
+    "mermaid-cli": "^0.2.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-dropzone": "^19.1.1",
@@ -26,5 +28,18 @@
     "postcss": "^8.5.25",
     "tailwindcss": "^3.4.19",
     "vite": "^8.2.0"
-  }
+  },
+  "description": "This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.",
+  "main": "postcss.config.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jeniljetpuriya05/CyberLenseAI.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jeniljetpuriya05/CyberLenseAI/issues"
+  },
+  "homepage": "https://github.com/jeniljetpuriya05/CyberLenseAI#readme"
 }
