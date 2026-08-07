@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search,
@@ -13,6 +13,7 @@ import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Pagination from '../components/ui/Pagination';
 import { investigations } from '../data/dummyData';
+import { api } from '../services/api';
 
 const ITEMS_PER_PAGE = 5;
 
@@ -24,9 +25,29 @@ export default function Investigations() {
   const [sortField, setSortField] = useState('created');
   const [sortDir, setSortDir] = useState('desc');
   const [currentPage, setCurrentPage] = useState(1);
+  const [cases, setCases] = useState(investigations);
+  const [apiError, setApiError] = useState('');
 
   const statuses = ['All', 'Active', 'Under Review', 'Closed'];
   const priorities = ['All', 'Critical', 'High', 'Medium', 'Low'];
+
+  useEffect(() => {
+    api.listCases()
+      .then((items) => {
+        setCases(items.map((item) => ({
+          id: String(item.id),
+          name: item.title,
+          description: item.description || '',
+          investigator: 'Current User',
+          category: 'Network Forensics',
+          status: item.status === 'open' ? 'Active' : 'Closed',
+          priority: 'Medium',
+          created: item.created_at,
+        })));
+        setApiError('');
+      })
+      .catch((error) => setApiError(error.message));
+  }, []);
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -45,7 +66,7 @@ export default function Investigations() {
       : <ChevronDown className="w-3 h-3 text-blue-600" />;
   };
 
-  const filtered = investigations
+  const filtered = cases
     .filter((c) => {
       const q = search.toLowerCase();
       const matchSearch =
@@ -83,8 +104,9 @@ export default function Investigations() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Investigations</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {investigations.length} total cases · {investigations.filter((c) => c.status === 'Active').length} active
+            {cases.length} total cases - {cases.filter((c) => c.status === 'Active').length} active
           </p>
+          {apiError && <p className="text-xs text-amber-600 mt-1">{apiError}</p>}
         </div>
         <Button icon={Plus} onClick={() => navigate('/investigations/create')}>
           New Investigation

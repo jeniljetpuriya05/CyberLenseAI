@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FolderOpen,
@@ -26,13 +27,8 @@ import {
 import StatCard from '../components/ui/StatCard';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
-import {
-  dashboardStats,
-  activityFeed,
-  investigations,
-  weeklyData,
-  packetTimelineData,
-} from '../data/dummyData';
+import { api, getStoredUser } from '../services/api';
+import { weeklyData, packetTimelineData, activityFeed } from '../data/dummyData';
 
 const activityTypeConfig = {
   threat: { icon: AlertTriangle, color: 'text-red-500', bg: 'bg-red-50' },
@@ -60,7 +56,15 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const recentCases = investigations.slice(0, 5);
+  const user = getStoredUser();
+  const firstName = (user?.name || 'Investigator').split(' ')[0];
+  const [stats, setStats] = useState({ total_cases: 0, active_cases: 0, closed_cases: 0, total_pcaps: 0, recent_cases: [] });
+
+  useEffect(() => {
+    api.dashboardStats().then(setStats).catch(() => {});
+  }, []);
+
+  const recentCases = stats.recent_cases;
 
   return (
     <div className="space-y-8 animate-slide-up">
@@ -76,7 +80,7 @@ export default function Dashboard() {
             })}
           </p>
           <h1 className="text-2xl font-bold text-gray-900 mt-0.5">
-            Good evening, Jenil 👋
+            Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, {firstName} 👋
           </h1>
           <p className="text-sm text-gray-500 mt-1">
             Here's what's happening across your investigations today.
@@ -105,31 +109,31 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Investigations"
-          value={dashboardStats.totalInvestigations}
+          value={stats.total_cases}
           icon={FolderOpen}
           color="blue"
-          trend={{ positive: true, value: '+2', label: 'this month' }}
+          trend={{ positive: true, value: `${stats.total_cases}`, label: 'total' }}
         />
         <StatCard
           title="Active Cases"
-          value={dashboardStats.activeCases}
+          value={stats.active_cases}
           icon={Activity}
           color="purple"
-          trend={{ positive: false, value: '-1', label: 'vs last week' }}
+          trend={{ positive: true, value: `${stats.active_cases}`, label: 'open' }}
         />
         <StatCard
           title="Uploaded PCAPs"
-          value={dashboardStats.uploadedPCAPs}
+          value={stats.total_pcaps}
           icon={Upload}
           color="amber"
-          trend={{ positive: true, value: '+1', label: 'today' }}
+          trend={{ positive: true, value: `${stats.total_pcaps}`, label: 'files' }}
         />
         <StatCard
-          title="Threats Detected"
-          value={dashboardStats.threatsDetected}
+          title="Closed Cases"
+          value={stats.closed_cases}
           icon={Shield}
           color="red"
-          sub={`${dashboardStats.openThreats} open · ${dashboardStats.resolvedCases} resolved`}
+          sub={`${stats.active_cases} open · ${stats.closed_cases} closed`}
         />
       </div>
 
@@ -227,17 +231,16 @@ export default function Dashboard() {
                   >
                     <td className="px-5 py-3.5">
                       <span className="text-xs font-mono font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg">
-                        {c.id}
+                        #{c.id}
                       </span>
                     </td>
                     <td className="px-4 py-3.5">
-                      <p className="text-sm font-medium text-gray-900 truncate max-w-[160px]">{c.name}</p>
-                      <p className="text-xs text-gray-400">{c.investigator}</p>
+                      <p className="text-sm font-medium text-gray-900 truncate max-w-[160px]">{c.title}</p>
                     </td>
-                    <td className="px-4 py-3.5"><Badge label={c.status} /></td>
-                    <td className="px-4 py-3.5"><Badge label={c.priority} /></td>
+                    <td className="px-4 py-3.5"><Badge label={c.status === 'open' ? 'Active' : 'Closed'} /></td>
+                    <td className="px-4 py-3.5"><Badge label="Medium" /></td>
                     <td className="px-4 py-3.5 hidden sm:table-cell">
-                      <span className="text-xs text-gray-500">{c.created}</span>
+                      <span className="text-xs text-gray-500">{new Date(c.created_at).toLocaleDateString()}</span>
                     </td>
                   </tr>
                 ))}

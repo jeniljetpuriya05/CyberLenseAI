@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
+import { api } from '../services/api';
 
 const categories = [
   'Network Intrusion',
@@ -36,6 +37,7 @@ export default function CreateInvestigation() {
   });
   const [errors, setErrors] = useState({});
   const [showSuccess, setShowSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const set = (field, val) => {
     setForm((p) => ({ ...p, [field]: val }));
@@ -51,11 +53,19 @@ export default function CreateInvestigation() {
     return errs;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
-    setShowSuccess(true);
+    setLoading(true);
+    try {
+      await api.createCase({ title: form.name, description: form.description });
+      setShowSuccess(true);
+    } catch (error) {
+      setErrors({ form: error.message });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const FieldLabel = ({ label, required }) => (
@@ -197,9 +207,12 @@ export default function CreateInvestigation() {
               Cancel
             </Button>
             <Button type="submit" icon={CheckCircle}>
-              Create Investigation
+              {loading ? 'Creating...' : 'Create Investigation'}
             </Button>
           </div>
+          {errors.form && (
+            <p className="px-6 pb-4 text-sm text-red-600">{errors.form}</p>
+          )}
         </div>
       </form>
 
