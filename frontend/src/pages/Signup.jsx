@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { api } from '../services/api';
+
 import { Shield, Eye, EyeOff, Lock, Mail, UserPlus, ArrowRight, CheckCircle } from 'lucide-react';
 
 const features = [
@@ -31,19 +33,21 @@ export default function Signup() {
     return errs;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = validate();
-    if (Object.keys(errs).length > 0) {
-      setErrors(errs);
-      return;
-    }
+    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setLoading(true);
     setErrors({});
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      await api.register({ name, email, password });
+      await api.login({ email, password });
       navigate('/dashboard');
-    }, 1200);
+    } catch (err) {
+      setErrors({ email: err.message || 'Registration failed' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -128,7 +132,7 @@ export default function Signup() {
 
         <div className="relative z-10">
           <p className="text-blue-300 text-xs">
-            CyberLens AI &copy; 2024 &middot; University Final Year Project &middot; Software Engineering
+            CyberLens AI &copy; 2024 &middot; Jenil Jetpuriya &amp; Manthan Chavda
           </p>
         </div>
       </div>
@@ -273,7 +277,7 @@ export default function Signup() {
           </p>
 
           <p className="mt-6 text-center text-xs text-gray-400">
-            CyberLens AI © 2024 • For academic demonstration purposes only
+            CyberLens AI © 2024 • Jenil Jetpuriya & Manthan Chavda
           </p>
         </div>
       </div>

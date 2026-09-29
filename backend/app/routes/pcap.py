@@ -53,9 +53,24 @@ def upload_pcap():
     db.session.commit()
 
     app = current_app._get_current_object()
-    threading.Thread(target=_run_parser, args=(app, pcap_file.id), daemon=True).start()
+    if current_app.config.get("TESTING"):
+        _run_parser(app, pcap_file.id)
+    else:
+        threading.Thread(target=_run_parser, args=(app, pcap_file.id), daemon=True).start()
+
     return jsonify({"message": "Upload successful", "pcap_id": pcap_file.id, "status": "pending"}), 202
 
+@pcap_bp.get("/")
+@jwt_required()
+def list_uploaded_pcaps():
+    user_id = int(get_jwt_identity())
+    pcaps = (
+        PCAPFile.query.join(Case)
+        .filter(Case.created_by == user_id)
+        .order_by(PCAPFile.uploaded_at.desc())
+        .all()
+    )
+    return jsonify([pcap.to_dict() for pcap in pcaps]), 200
 
 @pcap_bp.get("/<int:pcap_id>/status")
 @jwt_required()
@@ -72,3 +87,29 @@ def pcap_status(pcap_id):
         "parse_status": pcap_file.parse_status,
         "packet_count": pcap_file.packet_count,
     }), 200
+
+
+@pcap_bp.get("/<int:pcap_id>/download")
+@jwt_required()
+def download_pcap(pcap_id):
+    import os
+    from flask import send_file
+
+    pcap_file = PCAPFile.query.join(Case).filter(
+        PCAPFile.id == pcap_id,
+        Case.created_by == int(get_jwt_identity()),
+    ).first()
+    if not pcap_file:
+        return jsonify({"error": "PCAP file not found"}), 404
+
+    if not pcap_file.file_path or not os.path.exists(pcap_file.file_path):
+        return jsonify({"error": "PCAP file not found on disk"}), 404
+
+    return send_file(
+        pcap_file.file_path,
+        as_attachment=True,
+        download_name=pcap_file.filename,
+        mimetype="application/vnd.tcpdump.pcap",
+    )
+
+

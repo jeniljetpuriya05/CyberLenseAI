@@ -59,7 +59,8 @@ export default function CreateInvestigation() {
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setLoading(true);
     try {
-      await api.createCase({ title: form.name, description: form.description });
+      const created = await api.createCase({ title: form.name, description: form.description });
+      localStorage.setItem('cyberlens_selected_case', String(created.id));
       setShowSuccess(true);
     } catch (error) {
       setErrors({ form: error.message });
@@ -240,3 +241,4 @@ export default function CreateInvestigation() {
     </div>
   );
 }
+

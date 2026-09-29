@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Activity, Globe, Server, Package, ArrowRight, TrendingUp, RefreshCw,
+  Activity, Globe, Server, Package, ArrowRight, TrendingUp, RefreshCw, Cpu, ShieldAlert, CheckCircle2,
 } from 'lucide-react';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
@@ -37,9 +37,10 @@ export default function PacketAnalysis() {
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
   const [parseStatus, setParseStatus] = useState('');
-  const [activeTab, setActiveTab] = useState('protocols');
+  const [activeTab, setActiveTab] = useState('flows');
 
   const tabs = [
+    { id: 'flows', label: 'ML Flow Analysis' },
     { id: 'protocols', label: 'Protocol Distribution' },
     { id: 'sourceips', label: 'Source IPs' },
     { id: 'destips', label: 'Destination IPs' },
@@ -49,13 +50,16 @@ export default function PacketAnalysis() {
   useEffect(() => {
     api.listCases().then((items) => {
       setCases(items);
-      if (items.length > 0) setSelectedCase(String(items[0].id));
+      const savedCase = localStorage.getItem('cyberlens_selected_case');
+      const nextCase = items.find((item) => String(item.id) === savedCase) || items[0];
+      if (nextCase) setSelectedCase(String(nextCase.id));
     }).catch(() => {});
   }, []);
 
   // Fetch analysis when case changes
   useEffect(() => {
     if (!selectedCase) return;
+    localStorage.setItem('cyberlens_selected_case', selectedCase);
     fetchAnalysis();
   }, [selectedCase]);
 
@@ -65,7 +69,6 @@ export default function PacketAnalysis() {
       .then((data) => {
         setAnalysis(data);
         setLoading(false);
-        // If no packets yet, check pcap parse status
         if (data.total_packets === 0) {
           checkParseStatus();
         } else {
@@ -81,16 +84,18 @@ export default function PacketAnalysis() {
       if (pcaps.length === 0) { setParseStatus('no_pcap'); return; }
       const latest = pcaps[pcaps.length - 1];
       setParseStatus(latest.parse_status);
-      // Poll if still processing
       if (latest.parse_status === 'processing' || latest.parse_status === 'pending') {
         setTimeout(() => fetchAnalysis(), 3000);
       }
     }).catch(() => {});
   };
 
-  // Derived data for charts
   const protocols = analysis?.protocols || {};
   const totalPackets = analysis?.total_packets || 0;
+  const totalFlows = analysis?.ml_total_flows || 0;
+  const malFlows = analysis?.ml_malicious_flows || 0;
+  const normFlows = analysis?.ml_normal_flows || 0;
+  const flowResults = analysis?.ml_detection_results || [];
 
   const protocolTableData = Object.entries(protocols).map(([name, count]) => ({
     protocol: name,
@@ -112,7 +117,6 @@ export default function PacketAnalysis() {
     .sort((a, b) => b.packets - a.packets);
 
   const timeline = analysis?.packet_timeline || [];
-
   const isProcessing = parseStatus === 'processing' || parseStatus === 'pending';
   const noPcap = parseStatus === 'no_pcap';
 
@@ -129,7 +133,6 @@ export default function PacketAnalysis() {
           </p>
         </div>
         <div className="flex gap-2.5">
-          {/* Case selector */}
           <select
             value={selectedCase}
             onChange={(e) => setSelectedCase(e.target.value)}
@@ -154,7 +157,7 @@ export default function PacketAnalysis() {
         <div className="bg-blue-50 border border-blue-200 rounded-2xl px-5 py-4 flex items-center gap-3">
           <RefreshCw className="w-4 h-4 text-blue-600 animate-spin" />
           <p className="text-sm text-blue-700 font-medium">
-            PCAP is being parsed… Results will appear automatically.
+            PCAP is being parsed and evaluated by ML Engine… Results will appear automatically.
           </p>
         </div>
       )}
@@ -175,19 +178,19 @@ export default function PacketAnalysis() {
           icon={Package} color="blue"
         />
         <StatCard
-          title="Protocols"
-          value={loading ? '…' : Object.keys(protocols).length}
-          icon={Activity} color="purple"
+          title="Extracted Flows"
+          value={loading ? '…' : totalFlows.toLocaleString()}
+          icon={Cpu} color="purple"
         />
         <StatCard
-          title="Unique Src IPs"
-          value={loading ? '…' : (analysis?.unique_src_ips?.length || 0)}
-          icon={Globe} color="amber"
+          title="Normal Flows"
+          value={loading ? '…' : normFlows.toLocaleString()}
+          icon={CheckCircle2} color="green"
         />
         <StatCard
-          title="Unique Dst IPs"
-          value={loading ? '…' : (analysis?.unique_dst_ips?.length || 0)}
-          icon={Server} color="green"
+          title="Malicious Flows"
+          value={loading ? '…' : malFlows.toLocaleString()}
+          icon={ShieldAlert} color="red"
         />
         <StatCard
           title="Avg Pkt Size"
@@ -277,6 +280,41 @@ export default function PacketAnalysis() {
           </div>
 
           <div className="overflow-y-auto max-h-64">
+            {activeTab === 'flows' && (
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50/50 border-b border-gray-100">
+                    <th className="text-left text-xs font-semibold text-gray-500 px-4 py-2.5">Flow ID</th>
+                    <th className="text-left text-xs font-semibold text-gray-500 px-4 py-2.5">Classification</th>
+                    <th className="text-left text-xs font-semibold text-gray-500 px-4 py-2.5">Confidence</th>
+                    <th className="text-left text-xs font-semibold text-gray-500 px-4 py-2.5">Endpoints</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {flowResults.length === 0 ? (
+                    <tr><td colSpan={4} className="px-5 py-6 text-center text-sm text-gray-400">No flow data available</td></tr>
+                  ) : flowResults.slice(0, 50).map((f) => {
+                    const isMal = f.prediction === 1;
+                    const confPct = Math.round((f.confidence || 0) * 100);
+                    return (
+                      <tr key={f.flow_id} className="hover:bg-blue-50/20 transition-colors">
+                        <td className="px-4 py-3 text-xs font-mono font-semibold text-gray-700">{f.flow_id}</td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-md ${isMal ? 'text-red-700 bg-red-50' : 'text-emerald-700 bg-emerald-50'}`}>
+                            {f.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs font-medium text-gray-900">{confPct}%</td>
+                        <td className="px-4 py-3 text-xs font-mono text-gray-600 truncate max-w-[180px]">
+                          {f.src_ip}:{f.src_port} &rarr; {f.dst_ip}:{f.dst_port}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+
             {activeTab === 'protocols' && (
               <table className="w-full">
                 <thead>
@@ -352,12 +390,13 @@ export default function PacketAnalysis() {
         </Card>
       </div>
 
-      {/* Phase 2 notice */}
-      <div className="bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 text-center">
-        <p className="text-xs text-gray-500">
-          These extracted features will be used by the <span className="font-semibold text-blue-600">AI Detection Engine</span> in Phase 2.
+      <div className="bg-blue-50/60 border border-blue-200/80 rounded-2xl px-5 py-4 text-center">
+        <p className="text-xs text-blue-800">
+          Flow metadata & statistical features are analyzed using the <span className="font-semibold text-blue-900">Random Forest Threat Classifier</span>. The system works strictly with network-flow metadata without decrypting encrypted payloads.
         </p>
       </div>
     </div>
   );
 }
+
+

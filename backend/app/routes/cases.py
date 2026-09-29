@@ -66,7 +66,7 @@ def get_case(case_id):
         .first()
     )
     data = case.to_dict()
-    data["pcap_files"] = [pcap.to_dict() for pcap in case.pcap_files]
+    data["pcap_files"] = [pcap.to_dict() for pcap in sorted(case.pcap_files, key=lambda item: item.uploaded_at, reverse=True)]
     data["analysis_summary"] = {
         "total_packets": latest_report.total_packets,
         "anomaly_score": latest_report.anomaly_score,
@@ -102,3 +102,4 @@ def delete_case(case_id):
     db.session.delete(case)
     db.session.commit()
     return jsonify({"message": "Case deleted"}), 200
+

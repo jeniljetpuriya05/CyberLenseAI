@@ -10,6 +10,7 @@ import {
   LogOut,
   X,
 } from 'lucide-react';
+import { clearSession, getStoredUser } from '../../services/api';
 
 const pageTitles = {
   '/dashboard': 'Dashboard',
@@ -42,6 +43,13 @@ export default function Topbar({ onMenuClick }) {
 
   const pageTitle = pageTitles[location.pathname] || 'CyberLens AI';
   const unreadCount = notifications.filter((n) => n.unread).length;
+  const user = getStoredUser();
+  const initials = (user?.name || 'User')
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -144,11 +152,11 @@ export default function Topbar({ onMenuClick }) {
             className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-xl hover:bg-gray-100 transition-colors"
           >
             <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
-              JJ
+              {initials}
             </div>
             <div className="hidden md:block text-left">
-              <p className="text-xs font-semibold text-gray-900 leading-none">Jenil Jetpuriya</p>
-              <p className="text-[10px] text-gray-400 mt-0.5">Forensic Analyst</p>
+              <p className="text-xs font-semibold text-gray-900 leading-none">{user?.name || 'Investigator'}</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">{user?.role || 'Forensic Analyst'}</p>
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-gray-400 hidden md:block" />
           </button>
@@ -156,8 +164,8 @@ export default function Topbar({ onMenuClick }) {
           {showUserMenu && (
             <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl border border-gray-200 shadow-card-lg overflow-hidden animate-slide-up z-50">
               <div className="px-4 py-3 border-b border-gray-100">
-                <p className="text-xs font-semibold text-gray-900">Jenil Jetpuriya</p>
-                <p className="text-[10px] text-gray-400">jenil.jetpuriya@cyberlens.ai</p>
+                <p className="text-xs font-semibold text-gray-900">{user?.name || 'Investigator'}</p>
+                <p className="text-[10px] text-gray-400">{user?.email || 'Not signed in'}</p>
               </div>
               <div className="p-1.5">
                 <button
@@ -176,7 +184,7 @@ export default function Topbar({ onMenuClick }) {
                 </button>
                 <div className="border-t border-gray-100 my-1" />
                 <button
-                  onClick={() => navigate('/login')}
+                  onClick={() => { clearSession(); navigate('/login'); }}
                   className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50 transition-colors"
                 >
                   <LogOut className="w-4 h-4" />

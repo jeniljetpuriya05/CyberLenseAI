@@ -30,24 +30,28 @@ export default function UploadPCAP() {
   const [uploadError, setUploadError] = useState('');
   const [rejectedError, setRejectedError] = useState('');
   const [loadingCases, setLoadingCases] = useState(true);
+  const [refreshCount, setRefreshCount] = useState(0);
 
   useEffect(() => {
     api.listCases()
       .then((items) => {
         setCases(items);
-        if (items.length > 0) setSelectedCase(String(items[0].id));
+        const savedCase = localStorage.getItem('cyberlens_selected_case');
+        const nextCase = items.find((item) => String(item.id) === savedCase) || items[0];
+        if (nextCase) setSelectedCase(String(nextCase.id));
       })
       .catch((err) => setUploadError(err.message))
       .finally(() => setLoadingCases(false));
   }, []);
 
-  // Load real uploaded files for selected case
+  // Load real uploaded files for selected case from the database after navigation.
   useEffect(() => {
     if (!selectedCase) { setUploadedFiles([]); return; }
+    localStorage.setItem('cyberlens_selected_case', selectedCase);
     api.getCase(selectedCase)
       .then((data) => setUploadedFiles(data.pcap_files || []))
       .catch(() => setUploadedFiles([]));
-  }, [selectedCase, done]);
+  }, [selectedCase, refreshCount]);
 
   const onDrop = useCallback((accepted, rejected) => {
     setRejectedError('');
@@ -91,8 +95,10 @@ export default function UploadPCAP() {
       try {
         setProgress((p) => ({ ...p, [item.id]: 30 }));
         const uploaded = await api.uploadPcap(selectedCase, item.file);
+        localStorage.setItem('cyberlens_selected_case', selectedCase);
         setProgress((p) => ({ ...p, [item.id]: 100 }));
         setDone((p) => ({ ...p, [item.id]: uploaded.pcap_id }));
+        setRefreshCount((c) => c + 1);
       } catch (err) {
         setUploadError(err.message);
         setProgress((p) => ({ ...p, [item.id]: 0 }));
@@ -101,6 +107,13 @@ export default function UploadPCAP() {
     setUploading(false);
   };
 
+  const hasPendingUpload = uploadedFiles.some((file) => file.parse_status === 'pending' || file.parse_status === 'processing');
+
+  useEffect(() => {
+    if (!selectedCase || !hasPendingUpload) return undefined;
+    const timer = setTimeout(() => setRefreshCount((count) => count + 1), 3000);
+    return () => clearTimeout(timer);
+  }, [selectedCase, hasPendingUpload, refreshCount]);
   const noCases = !loadingCases && cases.length === 0;
 
   return (
@@ -296,3 +309,5 @@ export default function UploadPCAP() {
     </div>
   );
 }
+
+

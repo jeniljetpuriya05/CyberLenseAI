@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { api } from '../services/api';
 import { Shield, Eye, EyeOff, Lock, Mail, ArrowRight, CheckCircle } from 'lucide-react';
 
 const features = [
@@ -27,19 +28,20 @@ export default function Login() {
     return errs;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = validate();
-    if (Object.keys(errs).length > 0) {
-      setErrors(errs);
-      return;
-    }
+    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setLoading(true);
     setErrors({});
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      await api.login({ email, password });
       navigate('/dashboard');
-    }, 1200);
+    } catch (err) {
+      setErrors({ password: err.message || 'Invalid credentials' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -146,7 +148,7 @@ export default function Login() {
         {/* Footer */}
         <div className="relative z-10">
           <p className="text-blue-300 text-xs">
-            CyberLens AI &copy; 2024 &middot; University Final Year Project &middot; Software Engineering
+            CyberLens AI &copy; 2024 &middot; Jenil Jetpuriya &amp; Manthan Chavda
           </p>
         </div>
       </div>
@@ -278,14 +280,8 @@ export default function Login() {
             </Link>
           </p>
 
-          <div className="mt-8 p-4 bg-blue-50 rounded-xl border border-blue-100">
-            <p className="text-xs font-semibold text-blue-700 mb-1">Demo Credentials</p>
-            <p className="text-xs text-blue-600">Email: analyst@cyberlens.ai</p>
-            <p className="text-xs text-blue-600">Password: forensics2024</p>
-          </div>
-
           <p className="mt-6 text-center text-xs text-gray-400">
-            CyberLens AI &copy; 2024 &middot; For academic demonstration purposes only
+            CyberLens AI &copy; 2024 &middot; Jenil Jetpuriya &amp; Manthan Chavda
           </p>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
+import { getStoredUser, clearSession } from '../../services/api';
 import {
   LayoutDashboard,
   FolderOpen,
@@ -29,7 +30,14 @@ const navItems = [
 export default function Sidebar({ open, onClose }) {
   const navigate = useNavigate();
 
-  const handleLogout = () => navigate('/login');
+  const user = getStoredUser();
+  const displayName = user?.name || 'Investigator';
+  const initials = displayName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+
+  const handleLogout = () => {
+    clearSession();
+    navigate('/login');
+  };
 
   return (
     <>
@@ -101,11 +109,11 @@ export default function Sidebar({ open, onClose }) {
         <div className="px-3 py-4 border-t border-gray-100 space-y-1">
           <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl">
             <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-              JJ
+              {initials}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-gray-900 truncate">Jenil Jetpuriya</p>
-              <p className="text-[10px] text-gray-400 truncate">Senior Forensic Analyst</p>
+              <p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
+              <p className="text-[10px] text-gray-400 truncate">{user?.email || 'Forensic Analyst'}</p>
             </div>
           </div>
           <button

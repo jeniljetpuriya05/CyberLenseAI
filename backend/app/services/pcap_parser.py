@@ -1,13 +1,30 @@
+import sys
 import json
+import logging
+from pathlib import Path
 from collections import Counter
 from datetime import datetime
 
 from flask import current_app, has_app_context
-from scapy.all import ICMP, IP, TCP, UDP, DNS, DNSQR, rdpcap
+from scapy.all import ICMP, IP, TCP, UDP, DNS, PcapReader
 
 from app.extensions import db
 from app.models import AnalysisReport, PCAPFile
 from app.services.threat_engine import detect_threats
+
+_root = Path(__file__).resolve().parent.parent.parent.parent
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
+
+from ml.packet_features.feature_extractor import extract_flows_from_packets
+from ml.predict import ThreatPredictor
+
+logger = logging.getLogger('CyberLens.PCAPParser')
+if not logger.handlers:
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] [%(name)s] %(message)s')
+
+# Memory safety limit: collect up to 250,000 representative packets for deep flow/ML analysis on huge PCAP files
+MAX_PACKETS_FOR_ML = 250_000
 
 
 def _protocol_name(packet):
@@ -30,19 +47,8 @@ def _protocol_name(packet):
     return "Other"
 
 
-def _build_timeline(packets):
-    """Group packets by minute and return list of {time, packets}."""
-    if not packets:
-        return []
-    counts = Counter()
-    for pkt in packets:
-        try:
-            dt = datetime.utcfromtimestamp(float(pkt.time))
-            key = dt.strftime("%H:%M")
-            counts[key] += 1
-        except Exception:
-            pass
-    return [{"time": t, "packets": c} for t, c in sorted(counts.items())]
+def _build_timeline_from_counts(time_counts):
+    return [{"time": t, "packets": c} for t, c in sorted(time_counts.items())]
 
 
 def _parse_and_store(pcap_file_id):
@@ -54,34 +60,106 @@ def _parse_and_store(pcap_file_id):
         pcap_file.parse_status = "processing"
         db.session.commit()
 
-        packets = rdpcap(pcap_file.file_path)
-        total_packets = len(packets)
+        logger.info(f"[PCAP] Streaming analysis for file: {pcap_file.file_path}")
 
         src_ip_counter = Counter()
         dst_ip_counter = Counter()
         protocol_counter = Counter()
-        packet_sizes = []
+        packet_sizes_sum = 0
+        time_counts = Counter()
+        total_packets = 0
+        first_time = None
+        last_time = None
 
-        for pkt in packets:
-            packet_sizes.append(len(pkt))
-            protocol_counter[_protocol_name(pkt)] += 1
-            if pkt.haslayer(IP):
-                src_ip_counter[pkt[IP].src] += 1
-                dst_ip_counter[pkt[IP].dst] += 1
+        analysis_packets = []
 
-        # Top 20 src/dst IPs with counts
+        # Stream with PcapReader to support large PCAP files (up to 2GB+) without OOM
+        with PcapReader(pcap_file.file_path) as reader:
+            for pkt in reader:
+                total_packets += 1
+                pkt_len = len(pkt)
+                packet_sizes_sum += pkt_len
+                protocol_counter[_protocol_name(pkt)] += 1
+
+                pkt_time = float(pkt.time)
+                if first_time is None:
+                    first_time = pkt_time
+                last_time = pkt_time
+
+                if pkt.haslayer(IP):
+                    src_ip_counter[pkt[IP].src] += 1
+                    dst_ip_counter[pkt[IP].dst] += 1
+
+                try:
+                    dt = datetime.utcfromtimestamp(pkt_time)
+                    time_counts[dt.strftime("%H:%M")] += 1
+                except Exception:
+                    pass
+
+                if total_packets <= MAX_PACKETS_FOR_ML:
+                    analysis_packets.append(pkt)
+
+        logger.info(f"[PCAP] Total packets processed: {total_packets} (sampled for ML: {len(analysis_packets)})")
+
         top_src = dict(src_ip_counter.most_common(20))
         top_dst = dict(dst_ip_counter.most_common(20))
-
-        # Unique IP lists (for backward compat)
         unique_src = sorted(src_ip_counter.keys())
         unique_dst = sorted(dst_ip_counter.keys())
 
-        avg_size = round(sum(packet_sizes) / len(packet_sizes), 2) if packet_sizes else 0.0
-        duration = float(packets[-1].time - packets[0].time) if total_packets > 1 else 0.0
-        timeline = _build_timeline(packets)
+        avg_size = round(packet_sizes_sum / total_packets, 2) if total_packets > 0 else 0.0
+        duration = float(last_time - first_time) if (first_time is not None and last_time is not None and total_packets > 1) else 0.0
+        timeline = _build_timeline_from_counts(time_counts)
 
-        threats, anomaly_score = detect_threats(packets)
+        # Baseline heuristic threat detection on analysis packets
+        threats, anomaly_score = detect_threats(analysis_packets)
+
+        # --- ML THREAT DETECTION PIPELINE ---
+        logger.info("[FLOW] Extracting network flows from packets...")
+        features_df, flow_metadata = extract_flows_from_packets(analysis_packets)
+        logger.info(f"[FLOW] Flows created: {len(flow_metadata)}")
+
+        ml_model_status = "none"
+        ml_total_flows = len(flow_metadata)
+        ml_normal_flows = 0
+        ml_malicious_flows = 0
+        ml_detection_results = []
+
+        if len(flow_metadata) > 0:
+            try:
+                logger.info("[ML] Running predictions with Random Forest model...")
+                predictor = ThreatPredictor.get_instance()
+                ml_prediction_output = predictor.predict_flows(features_df, flow_metadata)
+
+                ml_model_status = "completed"
+                ml_total_flows = ml_prediction_output["total_flows"]
+                ml_normal_flows = ml_prediction_output["normal_flows"]
+                ml_malicious_flows = ml_prediction_output["malicious_flows"]
+                ml_detection_results = ml_prediction_output["results"]
+                logger.info(
+                    f"[ML] Analysis completed. Total flows: {ml_total_flows}, "
+                    f"Normal: {ml_normal_flows}, Malicious: {ml_malicious_flows}"
+                )
+
+                # If malicious flows detected, append to threats summary
+                for f_res in ml_detection_results:
+                    if f_res["prediction"] == 1:
+                        conf_pct = int(f_res["confidence"] * 100)
+                        threats.append({
+                            "type": "ML Flow Threat",
+                            "severity": "High" if conf_pct >= 80 else "Medium",
+                            "src_ip": f_res["src_ip"],
+                            "dst_ip": f_res["dst_ip"],
+                            "packet_count": f_res["total_packets"],
+                            "confidence": f_res["confidence"],
+                            "description": f"Classified Malicious by ML model with {conf_pct}% confidence ({f_res['protocol']} flow)",
+                        })
+
+            except FileNotFoundError as e:
+                logger.warning(f"[ML] {e}")
+                ml_model_status = "no_model"
+            except Exception as e:
+                logger.exception(f"[ML] Error executing ML flow predictions: {e}")
+                ml_model_status = "error"
 
         report = AnalysisReport(
             pcap_id=pcap_file.id,
@@ -97,12 +175,20 @@ def _parse_and_store(pcap_file_id):
             top_dst_ips=json.dumps(top_dst),
             avg_packet_size=avg_size,
             packet_timeline=json.dumps(timeline),
+            # ML fields
+            ml_model_status=ml_model_status,
+            ml_total_flows=ml_total_flows,
+            ml_normal_flows=ml_normal_flows,
+            ml_malicious_flows=ml_malicious_flows,
+            ml_detection_results=json.dumps(ml_detection_results),
         )
         pcap_file.packet_count = total_packets
         pcap_file.parse_status = "done"
         db.session.add(report)
         db.session.commit()
-    except Exception:
+        logger.info(f"[PCAP] Report saved for PCAP ID {pcap_file.id}")
+    except Exception as e:
+        logger.exception(f"[PCAP] Error processing PCAP file {pcap_file_id}: {e}")
         db.session.rollback()
         failed_file = db.session.get(PCAPFile, pcap_file_id)
         if failed_file:

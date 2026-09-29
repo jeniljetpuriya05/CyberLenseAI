@@ -13,18 +13,25 @@ import Evidence from './pages/Evidence';
 import InvestigationTimeline from './pages/InvestigationTimeline';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
+import { getToken } from './services/api';
+
+function PrivateRoute({ children }) {
+  return getToken() ? children : <Navigate to="/login" replace />;
+}
+
+function PublicRoute({ children }) {
+  return getToken() ? <Navigate to="/dashboard" replace /> : children;
+}
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Auth */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
+        <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+        <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
         <Route path="/" element={<Navigate to="/login" replace />} />
 
-        {/* Main app layout */}
-        <Route element={<Layout />}>
+        <Route element={<PrivateRoute><Layout /></PrivateRoute>}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/investigations" element={<Investigations />} />
           <Route path="/investigations/create" element={<CreateInvestigation />} />
@@ -38,7 +45,6 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
         </Route>
 
-        {/* Catch-all */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>

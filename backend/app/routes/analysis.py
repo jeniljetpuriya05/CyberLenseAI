@@ -1,4 +1,4 @@
-import json
+﻿import json
 
 from flask import Blueprint, jsonify
 from flask_jwt_extended import get_jwt_identity, jwt_required
@@ -34,6 +34,11 @@ def _empty_analysis(case_id):
         "top_dst_ips": {},
         "avg_packet_size": 0.0,
         "packet_timeline": [],
+        "ml_model_status": "none",
+        "ml_total_flows": 0,
+        "ml_normal_flows": 0,
+        "ml_malicious_flows": 0,
+        "ml_detection_results": [],
     }
 
 
@@ -60,6 +65,12 @@ def case_analysis(case_id):
         "top_dst_ips": json.loads(report.top_dst_ips or "{}"),
         "avg_packet_size": report.avg_packet_size or 0.0,
         "packet_timeline": json.loads(report.packet_timeline or "[]"),
+        # ML threat detection fields
+        "ml_model_status": getattr(report, "ml_model_status", "none") or "none",
+        "ml_total_flows": getattr(report, "ml_total_flows", 0) or 0,
+        "ml_normal_flows": getattr(report, "ml_normal_flows", 0) or 0,
+        "ml_malicious_flows": getattr(report, "ml_malicious_flows", 0) or 0,
+        "ml_detection_results": json.loads(getattr(report, "ml_detection_results", "[]") or "[]"),
     }), 200
 
 
@@ -75,6 +86,7 @@ def case_stats(case_id):
             "threats_count": 0,
             "anomaly_score": 0.0,
             "top_protocol": None,
+            "ml_malicious_flows": 0,
         }), 200
 
     protocols = json.loads(report.protocols or "{}")
@@ -85,4 +97,5 @@ def case_stats(case_id):
         "threats_count": len(threats),
         "anomaly_score": report.anomaly_score or 0.0,
         "top_protocol": top_protocol,
+        "ml_malicious_flows": getattr(report, "ml_malicious_flows", 0) or 0,
     }), 200

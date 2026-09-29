@@ -1,4 +1,4 @@
-from datetime import datetime
+﻿from datetime import datetime
 
 from app.extensions import db
 
@@ -20,6 +20,14 @@ class AnalysisReport(db.Model):
     top_dst_ips = db.Column(db.Text, default="{}")
     avg_packet_size = db.Column(db.Float, default=0.0)
     packet_timeline = db.Column(db.Text, default="[]")
+
+    # ML Threat Detection Fields
+    ml_model_status = db.Column(db.Text, default="none")  # 'completed', 'no_model', 'error'
+    ml_total_flows = db.Column(db.Integer, default=0)
+    ml_normal_flows = db.Column(db.Integer, default=0)
+    ml_malicious_flows = db.Column(db.Integer, default=0)
+    ml_detection_results = db.Column(db.Text, default="[]")  # JSON flow results with confidence
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     pcap_file = db.relationship("PCAPFile", back_populates="analysis_reports")
