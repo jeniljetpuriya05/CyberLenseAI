@@ -1,4 +1,4 @@
-﻿"""
+"""
 PCAP Packet Flow Extractor using Scapy.
 Groups raw packets into bidirectional 5-tuple network flows and computes
 statistical flow features corresponding to the CIC-IDS2017 training schema.
@@ -11,6 +11,9 @@ import numpy as np
 import pandas as pd
 from scapy.layers.inet import IP, TCP, UDP, ICMP
 from scapy.packet import Packet
+
+# CICFlowMeter-compatible flow termination settings
+FLOW_IDLE_TIMEOUT = 120.0  # seconds — terminate flow if no packet for 120s
 
 root_dir = Path(__file__).resolve().parent.parent.parent
 if str(root_dir) not in sys.path:
@@ -64,6 +67,8 @@ class FlowAccumulator:
         self.fwd_bytes: int = 0
         self.bwd_bytes: int = 0
         self.all_packet_lengths: List[int] = []
+        self.fin_seen: bool = False
+        self.rst_seen: bool = False
 
     def add_packet(self, packet: Packet, is_fwd: bool, pkt_time: float, pkt_len: int):
         pkt_time_f = float(pkt_time)
@@ -79,6 +84,22 @@ class FlowAccumulator:
         else:
             self.bwd_packets += 1
             self.bwd_bytes += pkt_len
+
+        # Track TCP termination flags
+        if packet.haslayer(TCP):
+            flags = packet[TCP].flags
+            if flags & 0x01:  # FIN
+                self.fin_seen = True
+            if flags & 0x04:  # RST
+                self.rst_seen = True
+
+    def is_expired(self, current_time: float) -> bool:
+        """Check if flow should be terminated (idle timeout or TCP FIN/RST)."""
+        if self.fin_seen or self.rst_seen:
+            return True
+        if (current_time - self.last_time) > FLOW_IDLE_TIMEOUT:
+            return True
+        return False
 
     def to_features(self) -> Dict[str, float]:
         """
@@ -148,12 +169,15 @@ class FlowAccumulator:
 def extract_flows_from_packets(packets: List[Packet]) -> Tuple[pd.DataFrame, List[Dict[str, Any]]]:
     """
     Extract bidirectional network flows and features from Scapy packets.
+    Uses idle timeout (120s) and TCP FIN/RST to terminate flows,
+    matching CICFlowMeter behavior used to generate CIC-IDS2017 training data.
 
     Returns:
         features_df (pd.DataFrame): DataFrame containing rows with exact FEATURE_COLUMNS.
         flow_metadata (List[Dict]): List of metadata dictionaries for each flow.
     """
-    flows: Dict[Any, FlowAccumulator] = {}
+    active_flows: Dict[Any, FlowAccumulator] = {}
+    completed_flows: List[FlowAccumulator] = []
 
     for pkt in packets:
         endpoints = get_packet_endpoints(pkt)
@@ -169,7 +193,15 @@ def extract_flows_from_packets(packets: List[Packet]) -> Tuple[pd.DataFrame, Lis
         else:
             canonical_key = (dst_ip, src_ip, dport, sport, proto)
 
-        if canonical_key not in flows:
+        # Check if existing flow has expired
+        if canonical_key in active_flows:
+            existing = active_flows[canonical_key]
+            if existing.is_expired(pkt_time):
+                # Finalize the expired flow and start a new one
+                completed_flows.append(existing)
+                del active_flows[canonical_key]
+
+        if canonical_key not in active_flows:
             accumulator = FlowAccumulator(
                 fwd_src_ip=src_ip,
                 fwd_dst_ip=dst_ip,
@@ -178,20 +210,23 @@ def extract_flows_from_packets(packets: List[Packet]) -> Tuple[pd.DataFrame, Lis
                 proto=proto,
                 start_time=pkt_time,
             )
-            flows[canonical_key] = accumulator
+            active_flows[canonical_key] = accumulator
             accumulator.add_packet(pkt, is_fwd=True, pkt_time=pkt_time, pkt_len=pkt_len)
         else:
-            accumulator = flows[canonical_key]
+            accumulator = active_flows[canonical_key]
             is_fwd = (src_ip == accumulator.src_ip and sport == accumulator.src_port)
             accumulator.add_packet(pkt, is_fwd=is_fwd, pkt_time=pkt_time, pkt_len=pkt_len)
 
-    if not flows:
+    # Finalize any remaining active flows
+    completed_flows.extend(active_flows.values())
+
+    if not completed_flows:
         return pd.DataFrame(columns=FEATURE_COLUMNS), []
 
     features_rows = []
     metadata_list = []
 
-    for idx, accumulator in enumerate(flows.values(), start=1):
+    for idx, accumulator in enumerate(completed_flows, start=1):
         feat_dict = accumulator.to_features()
         meta_dict = accumulator.to_metadata(idx)
         features_rows.append(feat_dict)
@@ -203,14 +238,11 @@ def extract_flows_from_packets(packets: List[Packet]) -> Tuple[pd.DataFrame, Lis
 
 def validate_feature_vector(features_df: pd.DataFrame, expected_columns: Optional[List[str]] = None) -> bool:
     """
-    Validate incoming feature dataframe against the expected training schema:
-    - feature names
-    - feature count
-    - feature order
-    - numerical types / absence of NaNs / Infs
+    Validate incoming feature dataframe against the expected training schema.
+    Cleans invalid rows instead of crashing the entire prediction.
 
     Raises:
-        ValueError: If features do not match expected schema.
+        ValueError: If feature column names do not match expected schema.
     """
     expected = expected_columns or FEATURE_COLUMNS
 
@@ -225,7 +257,8 @@ def validate_feature_vector(features_df: pd.DataFrame, expected_columns: Optiona
             f"  Extra: {diff_extra}"
         )
 
-    if features_df.isna().sum().sum() > 0 or np.isinf(features_df.values).sum() > 0:
-        raise ValueError("Feature vector contains invalid NaN or Infinite values.")
+    # Replace inf with NaN, then fill NaN with 0 to avoid crashing
+    features_df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    features_df.fillna(0.0, inplace=True)
 
     return True

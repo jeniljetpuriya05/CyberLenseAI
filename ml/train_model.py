@@ -1,4 +1,4 @@
-﻿"""
+"""
 Model training script for CyberLens AI.
 Loads CIC-IDS2017 dataset, extracts canonical flow features, performs 80/20 stratified
 split, trains Random Forest Classifier, evaluates on test set, and saves model artifacts.
@@ -72,7 +72,8 @@ def train(
         logger.info(f"[ML] Training Random Forest (n_estimators={n_estimators}, n_jobs=-1, random_state=42)...")
         rf = RandomForestClassifier(
             n_estimators=n_estimators,
-            max_depth=max_depth,
+            max_depth=max_depth if max_depth else 20,
+            min_samples_leaf=5,
             random_state=42,
             n_jobs=-1,
         )

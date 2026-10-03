@@ -1,4 +1,4 @@
-﻿"""
+"""
 Preprocessing pipeline for CIC-IDS2017 dataset and network flow feature vectors.
 Maintains canonical feature order, handles NaN/Inf, and splits dataset.
 """
@@ -35,8 +35,12 @@ FEATURE_COLUMNS: List[str] = [
     "Flow Bytes/s",
     "Flow Packets/s",
     "Packet Length Mean",
-    "Packet Length Std"
+    "Packet Length Std",
 ]
+
+# Port ranges for binning Destination Port into categories
+_PORT_BINS = [0, 1024, 49152, 65536]
+_PORT_LABELS = [0, 1, 2]  # 0=well-known, 1=registered, 2=dynamic/private
 
 
 def verify_feature_columns(df: pd.DataFrame, expected_features: Optional[List[str]] = None) -> List[str]:
@@ -96,6 +100,15 @@ def preprocess_data(
     for col in selected_features:
         working_df[col] = pd.to_numeric(working_df[col], errors='coerce')
 
+    # Bin Destination Port into categories instead of using raw port numbers
+    if "Destination Port" in selected_features:
+        working_df["Destination Port"] = pd.cut(
+            working_df["Destination Port"].clip(0, 65535),
+            bins=_PORT_BINS,
+            labels=_PORT_LABELS,
+            include_lowest=True,
+        ).astype(float)
+
     # Replace +/- infinity with NaN
     working_df.replace([np.inf, -np.inf], np.nan, inplace=True)
 
@@ -133,26 +146,24 @@ def split_train_test(
     random_state: int = 42,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, Optional[pd.Series], Optional[pd.Series]]:
     """
-    Split data into 80% train and 20% test using stratified sampling.
+    Split data into train and test sets.
+    Uses contiguous block split (last N% as test) to prevent temporal data leakage
+    from correlated network flows in the CIC-IDS2017 dataset.
     """
-    logger.info(f"[ML] Splitting dataset into {(1 - test_size) * 100:.0f}% train and {test_size * 100:.0f}% test (stratified, random_state={random_state})...")
+    n = len(X)
+    split_idx = int(n * (1 - test_size))
 
-    if orig_labels is not None:
-        X_train, X_test, y_train, y_test, orig_train, orig_test = train_test_split(
-            X,
-            y,
-            orig_labels,
-            test_size=test_size,
-            random_state=random_state,
-            stratify=y,
-        )
-        return X_train, X_test, y_train, y_test, orig_train, orig_test
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X,
-        y,
-        test_size=test_size,
-        random_state=random_state,
-        stratify=y,
+    logger.info(
+        f"[ML] Splitting dataset: first {split_idx:,} rows for training, "
+        f"last {n - split_idx:,} rows for testing (contiguous split to prevent data leakage)."
     )
-    return X_train, X_test, y_train, y_test, None, None
+
+    X_train = X.iloc[:split_idx]
+    X_test = X.iloc[split_idx:]
+    y_train = y.iloc[:split_idx]
+    y_test = y.iloc[split_idx:]
+
+    orig_train = orig_labels.iloc[:split_idx] if orig_labels is not None else None
+    orig_test = orig_labels.iloc[split_idx:] if orig_labels is not None else None
+
+    return X_train, X_test, y_train, y_test, orig_train, orig_test

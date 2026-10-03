@@ -37,6 +37,10 @@ backend/reports/*
 
 # ML Datasets & large artifacts
 backend/ml/dataset/*.csv
+
+# Temporary extraction files
+extracted_doc.txt
+test_doc.docx
 backend/ml/dataset/*.zip
 backend/ml/dataset/*.pcap
 !backend/ml/dataset/README.md
