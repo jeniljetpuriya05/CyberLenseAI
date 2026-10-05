@@ -37,6 +37,8 @@ export default function PacketAnalysis() {
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
   const [parseStatus, setParseStatus] = useState('');
+  const [parseDetails, setParseDetails] = useState(null);
+  const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('flows');
 
   const tabs = [
@@ -65,6 +67,7 @@ export default function PacketAnalysis() {
 
   const fetchAnalysis = () => {
     setLoading(true);
+    setError('');
     api.getCaseAnalysis(selectedCase)
       .then((data) => {
         setAnalysis(data);
@@ -75,19 +78,23 @@ export default function PacketAnalysis() {
           setParseStatus('done');
         }
       })
-      .catch(() => setLoading(false));
+      .catch((err) => {
+        setError(err.message || 'Failed to load packet analysis');
+        setLoading(false);
+      });
   };
 
   const checkParseStatus = () => {
     api.getCase(selectedCase).then((caseData) => {
       const pcaps = caseData.pcap_files || [];
       if (pcaps.length === 0) { setParseStatus('no_pcap'); return; }
-      const latest = pcaps[pcaps.length - 1];
+      const latest = pcaps[0];
       setParseStatus(latest.parse_status);
+      setParseDetails(latest);
       if (latest.parse_status === 'processing' || latest.parse_status === 'pending') {
-        setTimeout(() => fetchAnalysis(), 3000);
+        setTimeout(() => fetchAnalysis(), 5000);
       }
-    }).catch(() => {});
+    }).catch((err) => setError(err.message || 'Unable to read PCAP status'));
   };
 
   const protocols = analysis?.protocols || {};
@@ -154,11 +161,29 @@ export default function PacketAnalysis() {
 
       {/* Processing banner */}
       {isProcessing && (
-        <div className="bg-blue-50 border border-blue-200 rounded-2xl px-5 py-4 flex items-center gap-3">
-          <RefreshCw className="w-4 h-4 text-blue-600 animate-spin" />
-          <p className="text-sm text-blue-700 font-medium">
-            PCAP is being parsed and evaluated by ML Engine… Results will appear automatically.
-          </p>
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl px-5 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <RefreshCw className="w-4 h-4 text-blue-600 animate-spin" />
+            <div>
+              <p className="text-sm text-blue-800 font-semibold">
+                Large PCAP is being parsed and evaluated by the ML engine.
+              </p>
+              <p className="text-xs text-blue-700 mt-0.5">
+                {parseDetails?.packet_count
+                  ? `${parseDetails.packet_count.toLocaleString()} packets streamed so far. Deep ML analysis uses optimized sampling for large captures.`
+                  : 'Results will appear automatically as soon as processing completes.'}
+              </p>
+            </div>
+          </div>
+          <span className="text-xs font-semibold text-blue-700 bg-white/70 border border-blue-100 rounded-full px-3 py-1">
+            Auto-refresh: 5s
+          </span>
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl px-5 py-4 text-sm text-red-700">
+          {error}
         </div>
       )}
 

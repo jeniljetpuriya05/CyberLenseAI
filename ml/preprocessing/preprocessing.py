@@ -43,6 +43,16 @@ _PORT_BINS = [0, 1024, 49152, 65536]
 _PORT_LABELS = [0, 1, 2]  # 0=well-known, 1=registered, 2=dynamic/private
 
 
+def bin_destination_port(port_series_or_val):
+    """Bin raw port values into standard categories (0=well-known, 1=registered, 2=dynamic)."""
+    return pd.cut(
+        pd.Series(port_series_or_val).clip(0, 65535),
+        bins=_PORT_BINS,
+        labels=_PORT_LABELS,
+        include_lowest=True,
+    ).astype(float)
+
+
 def verify_feature_columns(df: pd.DataFrame, expected_features: Optional[List[str]] = None) -> List[str]:
     """
     Verify that expected features exist in the DataFrame.
@@ -102,12 +112,7 @@ def preprocess_data(
 
     # Bin Destination Port into categories instead of using raw port numbers
     if "Destination Port" in selected_features:
-        working_df["Destination Port"] = pd.cut(
-            working_df["Destination Port"].clip(0, 65535),
-            bins=_PORT_BINS,
-            labels=_PORT_LABELS,
-            include_lowest=True,
-        ).astype(float)
+        working_df["Destination Port"] = bin_destination_port(working_df["Destination Port"])
 
     # Replace +/- infinity with NaN
     working_df.replace([np.inf, -np.inf], np.nan, inplace=True)

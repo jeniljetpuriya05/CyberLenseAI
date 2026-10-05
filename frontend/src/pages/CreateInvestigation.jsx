@@ -19,11 +19,8 @@ const categories = [
 ];
 
 const investigators = [
+  'Manthan Chavda',
   'Jenil Jetpuriya',
-  'Priya Sharma',
-  'Arjun Mehta',
-  'Sara Khan',
-  'Ravi Patel',
 ];
 
 export default function CreateInvestigation() {
@@ -31,7 +28,7 @@ export default function CreateInvestigation() {
   const [form, setForm] = useState({
     name: '',
     description: '',
-    investigator: 'Jenil Jetpuriya',
+    investigator: 'Manthan Chavda',
     priority: 'Medium',
     category: 'Network Intrusion',
   });

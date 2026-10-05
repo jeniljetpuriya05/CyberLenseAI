@@ -14,6 +14,11 @@ export function clearSession() {
   localStorage.removeItem('cyberlens_user');
 }
 
+function expireSession() {
+  clearSession();
+  window.dispatchEvent(new CustomEvent('cyberlens:auth-expired'));
+}
+
 async function request(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   if (!(options.body instanceof FormData)) {
@@ -25,7 +30,10 @@ async function request(path, options = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    if (response.status === 401) clearSession();
+    if (response.status === 401) {
+      expireSession();
+      throw new Error('Session expired. Please sign in again.');
+    }
     throw new Error(data.error || 'Request failed');
   }
   return data;

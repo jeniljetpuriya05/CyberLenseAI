@@ -9,6 +9,7 @@ import {
   RefreshCw,
   X,
   Loader,
+  Eye,
 } from 'lucide-react';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -32,6 +33,9 @@ export default function Reports() {
   const [selectedCase, setSelectedCase] = useState('');
   const [generateError, setGenerateError] = useState('');
   const [downloadingId, setDownloadingId] = useState(null);
+  const [previewingId, setPreviewingId] = useState(null);
+  const [previewReport, setPreviewReport] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState('');
 
   const fetchReports = useCallback(async () => {
     setLoading(true);
@@ -101,6 +105,10 @@ export default function Reports() {
     fetchReports();
   }, [fetchReports]);
 
+  useEffect(() => () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
+
   // Polling to wait for PDF generation to finish
   useEffect(() => {
     if (!generating || !generatingCaseId) return;
@@ -164,6 +172,35 @@ export default function Reports() {
     } finally {
       setDownloadingId(null);
     }
+  };
+
+  const openPreview = async (report) => {
+    setPreviewingId(report.rawCaseId);
+    try {
+      const token = localStorage.getItem('cyberlens_token');
+      const url = `${API_BASE}/cases/${report.rawCaseId}/report/download`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to preview report PDF');
+      }
+      const blob = await res.blob();
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(URL.createObjectURL(blob));
+      setPreviewReport(report);
+    } catch (err) {
+      alert('Preview error: ' + err.message);
+    } finally {
+      setPreviewingId(null);
+    }
+  };
+
+  const closePreview = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl('');
+    setPreviewReport(null);
   };
 
   const resetModal = () => {
@@ -320,15 +357,26 @@ export default function Reports() {
                       <span className="text-xs text-gray-500">{r.generatedOn}</span>
                     </td>
                     <td className="px-5 py-4">
-                      <Button
-                        variant="outline"
-                        size="xs"
-                        icon={downloadingId === r.rawCaseId ? Loader : Download}
-                        onClick={() => handleDownload(r.rawCaseId, r.name)}
-                        disabled={downloadingId === r.rawCaseId}
-                      >
-                        {downloadingId === r.rawCaseId ? 'Downloading…' : 'PDF'}
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          size="xs"
+                          icon={previewingId === r.rawCaseId ? Loader : Eye}
+                          onClick={() => openPreview(r)}
+                          disabled={previewingId === r.rawCaseId || r.status !== 'Final'}
+                        >
+                          {previewingId === r.rawCaseId ? 'Opening…' : 'Preview'}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="xs"
+                          icon={downloadingId === r.rawCaseId ? Loader : Download}
+                          onClick={() => handleDownload(r.rawCaseId, r.name)}
+                          disabled={downloadingId === r.rawCaseId || r.status !== 'Final'}
+                        >
+                          {downloadingId === r.rawCaseId ? 'Downloading…' : 'PDF'}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -460,6 +508,35 @@ export default function Reports() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal isOpen={Boolean(previewReport)} onClose={closePreview} title={previewReport?.name || 'Report Preview'} width="xl">
+        <div className="space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">{previewReport?.caseName}</p>
+              <p className="text-xs text-gray-500">{previewReport?.id} · {previewReport?.generatedOn}</p>
+            </div>
+            <Button
+              size="sm"
+              icon={Download}
+              onClick={() => handleDownload(previewReport.rawCaseId, previewReport.name)}
+            >
+              Download PDF
+            </Button>
+          </div>
+          {previewUrl ? (
+            <iframe
+              title="Forensic report preview"
+              src={previewUrl}
+              className="h-[70vh] w-full rounded-xl border border-gray-200 bg-gray-50"
+            />
+          ) : (
+            <div className="h-80 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center text-sm text-gray-500">
+              Preparing preview…
+            </div>
+          )}
+        </div>
       </Modal>
     </div>
   );

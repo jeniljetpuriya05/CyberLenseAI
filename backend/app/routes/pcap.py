@@ -86,6 +86,9 @@ def pcap_status(pcap_id):
         "pcap_id": pcap_file.id,
         "parse_status": pcap_file.parse_status,
         "packet_count": pcap_file.packet_count,
+        "filename": pcap_file.filename,
+        "file_size": pcap_file.file_size,
+        "uploaded_at": pcap_file.uploaded_at.isoformat(),
     }), 200
 
 

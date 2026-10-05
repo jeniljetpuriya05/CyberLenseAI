@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -23,9 +24,22 @@ function PublicRoute({ children }) {
   return getToken() ? <Navigate to="/dashboard" replace /> : children;
 }
 
+function AuthWatcher() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleExpired = () => navigate('/login', { replace: true });
+    window.addEventListener('cyberlens:auth-expired', handleExpired);
+    return () => window.removeEventListener('cyberlens:auth-expired', handleExpired);
+  }, [navigate]);
+
+  return null;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
+      <AuthWatcher />
       <Routes>
         <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
         <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />

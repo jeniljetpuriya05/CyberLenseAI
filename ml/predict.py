@@ -1,4 +1,4 @@
-﻿"""
+"""
 ML Prediction Service for CyberLens AI.
 Loads trained Random Forest model and feature schema to predict
 threat status and confidence probabilities for network flows.
@@ -16,6 +16,7 @@ if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
 from ml.packet_features.feature_extractor import validate_feature_vector
+from ml.preprocessing.preprocessing import bin_destination_port
 
 logger = logging.getLogger('CyberLens.ML.Predict')
 if not logger.handlers:
@@ -90,7 +91,9 @@ class ThreatPredictor:
         validate_feature_vector(features_df, self.feature_columns)
 
         # Arrange features in exactly the expected schema order
-        ordered_df = features_df[self.feature_columns]
+        ordered_df = features_df[self.feature_columns].copy()
+        if "Destination Port" in ordered_df.columns:
+            ordered_df["Destination Port"] = bin_destination_port(ordered_df["Destination Port"])
 
         # Predictions (0 = Normal, 1 = Malicious)
         predictions = self.model.predict(ordered_df)

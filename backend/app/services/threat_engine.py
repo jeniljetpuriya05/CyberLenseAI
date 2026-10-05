@@ -5,6 +5,8 @@ from scapy.layers.inet import ICMP, IP, TCP, UDP
 from scapy.packet import Raw
 from sklearn.ensemble import IsolationForest
 
+MAX_ANOMALY_FEATURE_ROWS = 10_000
+
 
 def _packet_protocol(packet):
     if packet.haslayer(TCP):
@@ -89,7 +91,8 @@ def detect_threats(packets):
 
     anomaly_score = 0.0
     if len(features) >= 2:
-        matrix = np.array(features, dtype=float)
+        feature_sample = features[:MAX_ANOMALY_FEATURE_ROWS]
+        matrix = np.array(feature_sample, dtype=float)
         model = IsolationForest(contamination=0.1, random_state=42)
         labels = model.fit_predict(matrix)
         anomaly_score = round(float(np.mean(labels == -1)), 4)

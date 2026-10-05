@@ -145,17 +145,26 @@ Total Length of Fwd Packets, Total Length of Bwd Packets,
 Flow Bytes/s, Flow Packets/s, Packet Length Mean, Packet Length Std
 ```
 
-### Model Performance (Trained & Evaluated)
-| Metric | Score |
-|--------|-------|
-| Accuracy | 99.59% |
-| Precision | 98.84% |
-| Recall | 99.08% |
-| F1-Score | 98.96% |
-| Total Test Samples | 565,576 |
-| True Positives | 110,291 |
-| False Positives | 1,298 |
-| False Negatives | 1,020 |
+### Model Performance (Trained & Evaluated with Time-Based Split)
+| Metric | Score | Notes |
+|--------|-------|-------|
+| Accuracy | 96.61% | Realistic temporal generalization |
+| Balanced Accuracy | 79.62% | More honest score for imbalanced normal-vs-attack traffic |
+| Precision | 98.63% | High fidelity alert precision (very low false alarms) |
+| Recall | 59.31% | Realistic detection of complex zero-days / infiltration |
+| F1-Score | 74.08% | Balanced real-world operational F1 |
+| Total Test Samples | 79,938 | Held-out contiguous temporal partition |
+| True Negatives | 73,349 | Correctly classified normal flows |
+| True Positives | 3,876 | Correctly detected attack flows |
+| False Positives | 54 | Minimal false alarms (0.07% FP rate) |
+| False Negatives | 2,659 | Sophisticated evasion attempts |
+
+Confusion matrix used for the updated evaluation:
+
+| Actual \ Predicted | Normal | Malicious |
+|--------------------|--------|-----------|
+| Normal | 73,349 | 54 |
+| Malicious | 2,659 | 3,876 |
 
 ### Model Artifacts Saved
 - `ml/models/random_forest.pkl` — Trained Random Forest model

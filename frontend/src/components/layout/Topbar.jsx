@@ -28,7 +28,7 @@ const pageTitles = {
 const notifications = [
   { id: 1, text: 'Critical threat detected in INV-2024-001', time: '2m ago', unread: true },
   { id: 2, text: 'PCAP analysis completed for harbor.pcap', time: '18m ago', unread: true },
-  { id: 3, text: 'New investigation created by Priya Sharma', time: '1h ago', unread: false },
+  { id: 3, text: 'New investigation created by Manthan Chavda', time: '1h ago', unread: false },
   { id: 4, text: 'Report RPT-2024-001 is ready for download', time: '2h ago', unread: false },
 ];
 

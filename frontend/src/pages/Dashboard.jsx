@@ -140,17 +140,17 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8 animate-slide-up">
-      {/* ── Modern Hero Header ─────────────────────────────────────────── */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-blue-700 via-indigo-700 to-slate-900 rounded-3xl p-8 text-white shadow-xl">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+      {/* ── Operations Header ─────────────────────────────────────────── */}
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-7 shadow-card">
+        <div className="absolute inset-x-0 top-0 h-1 bg-blue-700" />
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 backdrop-blur-md text-blue-200 border border-white/10">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 Forensic Operations Active
               </span>
-              <span className="text-xs text-blue-200">
+              <span className="text-xs text-slate-500">
                 {new Date().toLocaleDateString('en-US', {
                   weekday: 'short',
                   month: 'short',
@@ -159,12 +159,12 @@ export default function Dashboard() {
                 })}
               </span>
             </div>
-            <h1 className="text-3xl font-extrabold tracking-tight">
-              Good {greeting}, {firstName}! 👋
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-950">
+              Good {greeting}, {firstName}
             </h1>
-            <p className="text-sm text-blue-100/90 max-w-xl leading-relaxed">
-              Welcome to CyberLens AI. Inspect high-volume network packet captures, execute real-time ML
-              threat detection, and generate courtroom-admissible forensic artifacts.
+            <p className="text-sm text-slate-600 max-w-xl leading-relaxed">
+              Monitor investigations, review high-volume packet captures, run ML-assisted threat triage,
+              and generate professional forensic reporting artifacts from a single workspace.
             </p>
           </div>
 
@@ -174,7 +174,7 @@ export default function Dashboard() {
               size="sm"
               icon={Upload}
               onClick={() => navigate('/upload')}
-              className="!bg-white/10 !border-white/20 !text-white hover:!bg-white/20"
+              className="!border-slate-200 !text-slate-700 hover:!bg-slate-50"
             >
               Upload PCAP
             </Button>
@@ -182,7 +182,7 @@ export default function Dashboard() {
               size="sm"
               icon={Plus}
               onClick={() => navigate('/investigations/create')}
-              className="!bg-white !text-blue-700 hover:!bg-blue-50 font-semibold shadow-md"
+              className="font-semibold shadow-sm"
             >
               New Investigation
             </Button>
@@ -232,7 +232,7 @@ export default function Dashboard() {
               <p className="text-xs text-gray-500 mt-0.5">Packet timeline aggregate</p>
             </div>
             <span className="text-xs bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full font-medium ring-1 ring-blue-100">
-              Live Stream
+              Operational View
             </span>
           </div>
           <ResponsiveContainer width="100%" height={190}>
@@ -446,7 +446,7 @@ export default function Dashboard() {
           {
             icon: BarChart2,
             title: 'High-Capacity PCAP Engine',
-            desc: 'Optimized PcapReader streaming handles captures up to 2 GB with packet size and protocol telemetry.',
+            desc: 'Streaming parser records full packet counts, protocol telemetry, top talkers, and sampled deep ML analysis for large captures.',
             color: 'text-blue-600 bg-blue-50',
           },
           {

@@ -23,8 +23,11 @@ logger = logging.getLogger('CyberLens.PCAPParser')
 if not logger.handlers:
     logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] [%(name)s] %(message)s')
 
-# Memory safety limit: collect up to 250,000 representative packets for deep flow/ML analysis on huge PCAP files
-MAX_PACKETS_FOR_ML = 250_000
+# Deep ML/heuristic analysis is intentionally capped so large PCAP uploads stay responsive.
+MAX_PACKETS_FOR_ML = 20_000
+PROGRESS_COMMIT_INTERVAL = 5_000
+MAX_STORED_ML_RESULTS = 500
+MAX_THREAT_ROWS = 250
 
 
 def _protocol_name(packet):
@@ -99,7 +102,15 @@ def _parse_and_store(pcap_file_id):
                 if total_packets <= MAX_PACKETS_FOR_ML:
                     analysis_packets.append(pkt)
 
-        logger.info(f"[PCAP] Total packets processed: {total_packets} (sampled for ML: {len(analysis_packets)})")
+                if total_packets % PROGRESS_COMMIT_INTERVAL == 0:
+                    pcap_file.packet_count = total_packets
+                    db.session.commit()
+
+        sampled_analysis = total_packets > len(analysis_packets)
+        logger.info(
+            f"[PCAP] Total packets processed: {total_packets} "
+            f"(deep analysis sample: {len(analysis_packets)}, sampled={sampled_analysis})"
+        )
 
         top_src = dict(src_ip_counter.most_common(20))
         top_dst = dict(dst_ip_counter.most_common(20))
@@ -134,7 +145,7 @@ def _parse_and_store(pcap_file_id):
                 ml_total_flows = ml_prediction_output["total_flows"]
                 ml_normal_flows = ml_prediction_output["normal_flows"]
                 ml_malicious_flows = ml_prediction_output["malicious_flows"]
-                ml_detection_results = ml_prediction_output["results"]
+                ml_detection_results = ml_prediction_output["results"][:MAX_STORED_ML_RESULTS]
                 logger.info(
                     f"[ML] Analysis completed. Total flows: {ml_total_flows}, "
                     f"Normal: {ml_normal_flows}, Malicious: {ml_malicious_flows}"
@@ -154,6 +165,20 @@ def _parse_and_store(pcap_file_id):
                             "description": f"Classified Malicious by ML model with {conf_pct}% confidence ({f_res['protocol']} flow)",
                         })
 
+                if sampled_analysis:
+                    threats.append({
+                        "type": "Large Capture Sampling",
+                        "severity": "Info",
+                        "src_ip": "N/A",
+                        "dst_ip": "N/A",
+                        "packet_count": len(analysis_packets),
+                        "description": (
+                            f"Deep ML flow analysis used the first {len(analysis_packets):,} "
+                            f"of {total_packets:,} packets to reduce processing time. "
+                            "Protocol, IP, timeline, and packet counts still use the full capture."
+                        ),
+                    })
+
             except FileNotFoundError as e:
                 logger.warning(f"[ML] {e}")
                 ml_model_status = "no_model"
@@ -168,7 +193,7 @@ def _parse_and_store(pcap_file_id):
             unique_src_ips=json.dumps(unique_src),
             unique_dst_ips=json.dumps(unique_dst),
             protocols=json.dumps(dict(protocol_counter)),
-            threats_detected=json.dumps(threats),
+            threats_detected=json.dumps(threats[:MAX_THREAT_ROWS]),
             anomaly_score=anomaly_score,
             capture_duration=duration,
             top_src_ips=json.dumps(top_src),
