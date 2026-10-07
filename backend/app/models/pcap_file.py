@@ -13,6 +13,7 @@ class PCAPFile(db.Model):
     file_size = db.Column(db.Integer)
     packet_count = db.Column(db.Integer)
     parse_status = db.Column(db.Text, default="pending", nullable=False)
+    parse_progress = db.Column(db.Integer, default=0, nullable=False)
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     case = db.relationship("Case", back_populates="pcap_files")
@@ -26,5 +27,6 @@ class PCAPFile(db.Model):
             "file_size": self.file_size,
             "packet_count": self.packet_count,
             "parse_status": self.parse_status,
+            "parse_progress": self.parse_progress or 0,
             "uploaded_at": self.uploaded_at.isoformat(),
         }

@@ -70,8 +70,22 @@ export const api = {
   getCaseStats(caseId) {
     return request(`/cases/${caseId}/stats`);
   },
+  /**
+   * Fetch analysis summary + first page of ML flow results (50 per page).
+   * The response includes pagination metadata: flows_page, flows_per_page,
+   * flows_total, flows_total_pages.
+   */
   getCaseAnalysis(caseId) {
-    return request(`/cases/${caseId}/analysis`);
+    return request(`/cases/${caseId}/analysis?flows_page=1&flows_per_page=50`);
+  },
+  /**
+   * Fetch a specific page of ML flow results for lazy loading.
+   * @param {number|string} caseId
+   * @param {number} page - 1-based page number
+   * @param {number} perPage - results per page (max 200, backend-enforced)
+   */
+  getCaseAnalysisPage(caseId, page = 1, perPage = 50) {
+    return request(`/cases/${caseId}/analysis?flows_page=${page}&flows_per_page=${perPage}`);
   },
   uploadPcap(caseId, file) {
     const body = new FormData();
@@ -82,6 +96,11 @@ export const api = {
   listPcaps() {
     return request('/pcap/');
   },
+  /**
+   * Get PCAP file parse status.
+   * Response includes: parse_status, packet_count, filename, file_size,
+   * uploaded_at, and parse_progress (0–100 integer).
+   */
   getPcapStatus(pcapId) {
     return request(`/pcap/${pcapId}/status`);
   },
@@ -95,5 +114,3 @@ export const api = {
     return request('/reports/all');
   },
 };
-
-

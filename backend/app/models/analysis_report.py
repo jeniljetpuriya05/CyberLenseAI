@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 
 from app.extensions import db
 
@@ -27,6 +27,9 @@ class AnalysisReport(db.Model):
     ml_normal_flows = db.Column(db.Integer, default=0)
     ml_malicious_flows = db.Column(db.Integer, default=0)
     ml_detection_results = db.Column(db.Text, default="[]")  # JSON flow results with confidence
+
+    # Large file mode — skips per-packet detail until explicitly requested
+    large_file_mode = db.Column(db.Boolean, default=False)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 

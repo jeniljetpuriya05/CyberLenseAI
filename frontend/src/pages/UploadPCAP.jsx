@@ -109,11 +109,13 @@ export default function UploadPCAP() {
 
   const hasPendingUpload = uploadedFiles.some((file) => file.parse_status === 'pending' || file.parse_status === 'processing');
 
+  // Auto-refresh every 3 s while any PCAP is still being parsed
   useEffect(() => {
     if (!selectedCase || !hasPendingUpload) return undefined;
     const timer = setTimeout(() => setRefreshCount((count) => count + 1), 3000);
     return () => clearTimeout(timer);
   }, [selectedCase, hasPendingUpload, refreshCount]);
+
   const noCases = !loadingCases && cases.length === 0;
 
   return (
@@ -298,7 +300,25 @@ export default function UploadPCAP() {
                   {formatBytes(f.file_size)} · {f.packet_count ? `${f.packet_count.toLocaleString()} packets` : 'Parsing…'} · {new Date(f.uploaded_at).toLocaleDateString()}
                 </p>
               </div>
-              <Badge label={f.parse_status === 'done' ? 'Analyzed' : f.parse_status === 'failed' ? 'Failed' : 'Pending'} />
+              {/* Progress bar for files being parsed, badge for done/failed */}
+              {(f.parse_status === 'processing' || f.parse_status === 'pending') ? (
+                <div className="flex flex-col gap-1 min-w-[150px]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-blue-700 font-medium">
+                      {f.parse_status === 'processing' ? 'Parsing…' : 'Queued'}
+                    </span>
+                    <span className="text-xs font-bold text-blue-600">{f.parse_progress || 0}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-blue-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                      style={{ width: `${f.parse_progress || 0}%` }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <Badge label={f.parse_status === 'done' ? 'Analyzed' : f.parse_status === 'failed' ? 'Failed' : 'Pending'} />
+              )}
               <Button variant="secondary" size="xs" icon={Activity} onClick={() => navigate('/packet-analysis')}>
                 Analyze
               </Button>
@@ -309,5 +329,3 @@ export default function UploadPCAP() {
     </div>
   );
 }
-
-

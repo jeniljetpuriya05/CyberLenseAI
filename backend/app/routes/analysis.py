@@ -1,6 +1,6 @@
-﻿import json
+import json
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.models import AnalysisReport, Case
@@ -39,6 +39,11 @@ def _empty_analysis(case_id):
         "ml_normal_flows": 0,
         "ml_malicious_flows": 0,
         "ml_detection_results": [],
+        "large_file_mode": False,
+        "flows_page": 1,
+        "flows_per_page": 50,
+        "flows_total": 0,
+        "flows_total_pages": 1,
     }
 
 
@@ -50,6 +55,15 @@ def case_analysis(case_id):
         return jsonify({"error": "Case not found"}), 404
     if not report:
         return jsonify(_empty_analysis(case_id)), 200
+
+    # Pagination for ML flow results
+    flows_page = request.args.get("flows_page", 1, type=int)
+    flows_per_page = min(request.args.get("flows_per_page", 50, type=int), 200)
+    all_flows = json.loads(getattr(report, "ml_detection_results", "[]") or "[]")
+    total_flows_stored = len(all_flows)
+    start = (flows_page - 1) * flows_per_page
+    end = start + flows_per_page
+    paginated_flows = all_flows[start:end]
 
     return jsonify({
         "case_id": case_id,
@@ -70,7 +84,14 @@ def case_analysis(case_id):
         "ml_total_flows": getattr(report, "ml_total_flows", 0) or 0,
         "ml_normal_flows": getattr(report, "ml_normal_flows", 0) or 0,
         "ml_malicious_flows": getattr(report, "ml_malicious_flows", 0) or 0,
-        "ml_detection_results": json.loads(getattr(report, "ml_detection_results", "[]") or "[]"),
+        "ml_detection_results": paginated_flows,
+        # Pagination metadata
+        "flows_page": flows_page,
+        "flows_per_page": flows_per_page,
+        "flows_total": total_flows_stored,
+        "flows_total_pages": max(1, (total_flows_stored + flows_per_page - 1) // flows_per_page),
+        # Large file mode flag
+        "large_file_mode": getattr(report, "large_file_mode", False) or False,
     }), 200
 
 

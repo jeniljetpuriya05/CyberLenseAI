@@ -22,6 +22,11 @@ ANALYSIS_REPORT_COLUMNS = {
     "ml_normal_flows": "INTEGER DEFAULT 0",
     "ml_malicious_flows": "INTEGER DEFAULT 0",
     "ml_detection_results": "TEXT DEFAULT '[]'",
+    "large_file_mode": "BOOLEAN DEFAULT 0",
+}
+
+PCAP_FILE_COLUMNS = {
+    "parse_progress": "INTEGER DEFAULT 0",
 }
 
 
@@ -39,6 +44,14 @@ def ensure_sqlite_schema():
         db.session.execute(text(f"ALTER TABLE analysis_reports ADD COLUMN {name} {ddl}"))
     if missing:
         db.session.commit()
+
+    if "pcap_files" in inspector.get_table_names():
+        existing_pcap = {column["name"] for column in inspector.get_columns("pcap_files")}
+        missing_pcap = [(name, ddl) for name, ddl in PCAP_FILE_COLUMNS.items() if name not in existing_pcap]
+        for name, ddl in missing_pcap:
+            db.session.execute(text(f"ALTER TABLE pcap_files ADD COLUMN {name} {ddl}"))
+        if missing_pcap:
+            db.session.commit()
 
 
 def create_app(config_class=Config):
@@ -82,5 +95,3 @@ def create_app(config_class=Config):
         return jsonify({"error": "Internal server error"}), 500
 
     return app
-
-
